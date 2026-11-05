@@ -9,10 +9,12 @@
 #load libraries
 library(tidyverse)
 library(dplyr)
+library(EflowStats)
+library(lubridate)
 library(purrr) #to use map_dfr
 
 #load data (aggregated hourly data, with NaN and negative and non "n" flagged values filtered out)
-setwd("C:\\Users\\iameb\\OneDrive - UCB-O365\\Eva DLA Folder\\SNA\\SNA 10 minute data")
+setwd("C:\\Users\\iameb\\Github\\Niwot_Snow\\aggregated hourly data")
 
 site1 <- read.csv("sn1_hourly.csv")
 site6 <- read.csv("sn6_hourly.csv")
@@ -47,9 +49,10 @@ get_segments <- function(df, name){ #function takes in a dataframe and returns a
     mutate( #add a col with # of hrs since previous reading
       step = as.numeric(difftime(t, lag(t), units = "hours")),
       new_seg = is.na(step) | step > 1.5, #T wheneber a new continuous stretch begins (either no previous value or a jump greater than 1.5 hours)
-      seg_id = cumsum(new_seg) #running total so each continuous stretch has its own ID number
+      seg_id = cumsum(new_seg), #running total so each continuous stretch has its own ID number
+      WY = get_waterYear(t),
     ) |> 
-    group_by(seg_id) |> 
+    group_by(seg_id, WY) |> 
     summarise(start = min(t), end = max(t) +3600,
                .groups = "drop") |> #the +3600 adds one hour so each reading covers a full hour
     mutate(sensor = value_col) #add sensor column with the value columns name to label each continuous segment with the associated sensor
@@ -57,22 +60,22 @@ get_segments <- function(df, name){ #function takes in a dataframe and returns a
 
 segments <- map_dfr(datasets, get_segments) #runs get_segments function on each df in the list and combines resulting tabels into 1 df
 segments$sensor <- factor(segments$sensor, levels = unique(segments$sensor)) #converts sensor to a factor
+#fix problem with seconds since 1970 on x axis and remove empty NA panel
+segments <- segments |> 
+ mutate(start = as.POSIXct(start, origin = "1970-01-01", tz = "America/Denver"),
+         end = as.POSIXct(end, origin = "1970-01-01", tz = "America/Denver"))|> 
+  filter(!is.na(WY))
 
 ggplot(segments) + 
   geom_rect(aes(xmin = start, xmax = end,
                 ymin = as.numeric(sensor) - 0.1, 
                 ymax = as.numeric(sensor) + 0.1)) + 
-  facet_wrap(~get_waterYear(date_notime), ncol = 4)
   scale_y_continuous(breaks = seq_along(levels(segments$sensor)), 
                      labels = levels(segments$sensor)) + 
-  labs(x = "Time", y = "Sensor") + 
-  theme_minimal()
+  scale_x_datetime(date_breaks = "1 month", date_labels = "%b")+
+  facet_wrap(~WY, ncol = 4, scales = "free_x")+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 
 #improvements: facet wrap by water year to get a plot like this for each water year so it is easier to read the
 
-
-#graph data (first attempt)
-#site1 |> 
- # ggplot(aes(date, site1)) + 
-  #geom_point(shape = "-", size = 1) + 
-  #theme_minimal()
