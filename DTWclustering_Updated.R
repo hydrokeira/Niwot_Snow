@@ -7,6 +7,7 @@ library(dplyr)
 library(EflowStats)
 library(lubridate)
 library(dtw)
+library(data.table)
 
 
 setwd("C:\\Users\\iameb\\OneDrive - UCB-O365\\Eva DLA Folder\\SNA\\SNA data")
@@ -52,6 +53,9 @@ dailySnowWide$cluster <- cluster_assignments #add column to dailySnowWide with t
 
 dailySnowLong <- dailySnowWide |> #change back to long format
   pivot_longer(cols = 3:367, names_to = "waterYearDay", values_to = "snowDepth")
+
+fwrite(dailySnowLong, "C:\\Users\\iameb\\Github\\Niwot_Snow\\clusteredData.csv") #save to csv
+sensorClusterPairs <- dailySnowWide |> select(sensor, waterYear, cluster)
 
 ggplot(dailySnowLong, aes(x = as.numeric(waterYearDay), y = snowDepth, col = sensor))+ #plot cluster 1-7 with water year day on x, snowdepth on y, and color coded by sensor
   geom_line(aes(group = interaction(sensor, waterYear)))+
